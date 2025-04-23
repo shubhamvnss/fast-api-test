@@ -1,0 +1,14 @@
+pipeline {
+    agent any
+    environment {
+        DOCKER_IMAGE='shubdocker2022/fast-api'
+        DOCKER_CREDENTIALS_ID='docker-hub-credentials'
+    }
+    stages {
+        stage ("checkout") {
+            steps {
+                echo "docker file found"
+            }
+        }
+    }
+}
