@@ -1,14 +1,63 @@
 pipeline {
     agent any
     environment {
-        DOCKER_IMAGE='shubdocker2022/fast-api'
-        DOCKER_CREDENTIALS_ID='docker-hub-credentials'
+        AWS_REGION = 'us-east-1'
+        ECR_ACCOUNT_ID = '937033986508'
+        ECR_REPO_NAME = 'test/fast-api'
+        IMAGE_TAG = "${BUILD_NUMBER}"
     }
+
     stages {
-        stage ("checkout") {
+        stage('Checkout') {
             steps {
-                echo "docker file found"
+                echo "Checking out source code..."
+                checkout scm
             }
+        }
+        stage ("buils docker image") {
+            steps {
+                script {
+                    echo "Building Docker image..."
+                    dockerImage = docker.build("${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${IMAGE_TAG}", "-f deployment/Dockerfile .")
+                }
+            }
+        }
+
+        stage('Docker Login to ECR') {
+            steps {
+                echo "Logging in to Amazon ECR..."
+                sh """
+                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                """
+            }
+        }
+
+        stage('Docker Push to ECR') {
+            steps {
+                echo "Pushing Docker image to ECR..."
+                sh """
+                    docker push ${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${IMAGE_TAG}
+                """
+            }
+        }
+
+        stage('Docker Cleanup') {
+            steps {
+                echo "Cleaning up local Docker images to save disk space..."
+                sh """
+                    docker rmi ${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${IMAGE_TAG} || true
+                    docker image prune -f || true
+                """
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "Docker Image pushed to ECR successfully!"
+        }
+        failure {
+            echo "Failed to push Docker image to ECR."
         }
     }
 }
